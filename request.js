@@ -990,8 +990,14 @@ Request.prototype.onResponse = function (response) {
     })
 
     dataStream.on("data", function (chunk) {
-      self._destdata = true
-      self.emit("data", chunk)
+      var emitted = self.emit("data", chunk)
+      if (emitted) {
+        self._destdata = true
+      } else {
+        // pause URL stream until we pipe it
+        dataStream.pause()
+        dataStream.unshift(chunk)
+      }
     })
     dataStream.on("end", function (chunk) {
       self._ended = true
@@ -1424,5 +1430,13 @@ function toJSON () {
 
 Request.prototype.toJSON = toJSON
 
+/* Fix per https://github.com/mikeal/request/issues/887#issuecomment-48831952 */
+var superOn = Request.prototype.on;
+Request.prototype.on = function (eventName) {
+  if (eventName === "data") {
+    this.resume()
+  }
+  superOn.apply(this, arguments)
+}
 
 module.exports = Request
